@@ -32,25 +32,35 @@ create_dir:
 
 upload_dir:
   args:
-    upload_id: id
     dst: path
-  response: TBD
+  response:
+    success: bool
+    # http no resume
+    endpoint: url # to upload as multipart form
 
 upload_file:
   args:
-    upload_id: id
     dst: path
-  response: TBD
+  response:
+    success: bool
+    # http no resume
+    endpoint: url # to upload as multipart form
 
 download_dir:
   args:
     src: path
-  response: TBD
+  response: # actually zip
+    success: bool
+    # http:
+    endpoint: url # download context
 
 download_file:
   args:
     src: path
-  response: TBD
+  response:
+    success: bool
+    # http:
+    endpoint: url # download context
 
 read_file:
   args:

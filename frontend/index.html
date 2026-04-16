@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Webfolder</title>
+</head>
+<body>
+  <h1>Webfolder</h1>
+
+  <div>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">⬆️ Upload</button>
+    <button onclick="goUp()">⬆️ Up</button>
+    <button onclick="createFolder()">📁 New Folder</button>
+    <button onclick="copySelected()">📋 Copy</button>
+    <button onclick="moveSelected()">✂️ Move</button>
+    <button onclick="paste()">📌 Paste</button>
+  </div>
+
+  <p id="path"></p>
+
+  <div id="files"></div>
+
+  <script src="index.js"></script>
+</body>
+</html>

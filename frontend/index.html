@@ -3,24 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <title>Webfolder</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>Webfolder</h1>
 
-  <div>
-    <input type="file" id="fileInput">
-    <button onclick="uploadFile()">⬆️ Upload</button>
-    <button onclick="goUp()">⬆️ Up</button>
-    <button onclick="createFolder()">📁 New Folder</button>
-    <button onclick="copySelected()">📋 Copy</button>
-    <button onclick="moveSelected()">✂️ Move</button>
-    <button onclick="paste()">📌 Paste</button>
-  </div>
+<div class="app">
 
-  <p id="path"></p>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <h2>Webfolder</h2>
 
-  <div id="files"></div>
+    <div class="section">
+      <p class="section-title">Quick Access</p>
+      <div class="item active">Home</div>
+      <div class="item">Recent</div>
+      <div class="item">Starred</div>
+      <div class="item">Trash</div>
+    </div>
 
-  <script src="index.js"></script>
+    <div class="section">
+      <p class="section-title">Folders</p>
+      <div class="item">webfolder-app</div>
+      <div class="sub">src</div>
+      <div class="sub">public</div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Storage</p>
+      <div class="storage-bar">
+        <div class="storage-used"></div>
+      </div>
+      <small>12.4 GB / 50 GB</small>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="breadcrumbs" id="breadcrumbs"></div>
+
+      <div class="actions">
+        <button onclick="goUp()">⬆️</button>
+        <button onclick="copySelected()">Copy</button>
+        <button onclick="moveSelected()">Move</button>
+        <button class="danger" onclick="deleteSelected()">Delete</button>
+        <button class="primary" onclick="paste()">Paste</button>
+
+        <input type="file" id="fileInput">
+        <button onclick="uploadFile()">Upload</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <table class="file-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" onclick="toggleAll(this)"></th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Size</th>
+          <th>Modified</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="files"></tbody>
+    </table>
+
+  </main>
+</div>
+
+<script src="index.js"></script>
 </body>
 </html>

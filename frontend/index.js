@@ -1,47 +1,96 @@
-let selected = null;
-let clipboard = null; // { type: "copy" | "move", path }
+let selectedSet = new Set();
+let clipboard = null;
 let currentPath = "/";
+let currentFiles = [];
+let lastSelectedIndex = null;
 
 async function loadDir(path) {
   const res = await fetch(`/api/read_dir?path=${encodeURIComponent(path)}`);
   const data = await res.json();
 
-  if (!data.success) {
-    alert(data.error);
+  if (!data.success || !Array.isArray(data.contents)) {
+    alert("Failed to load directory");
     return;
   }
 
   currentPath = path;
-  document.getElementById("path").textContent = "Path: " + path;
-
-  renderFiles(data.contents);
+  currentFiles = data.contents; 
+  selectedSet.clear(); //  сброс выбора при переходе
+  lastSelectedIndex = null;
+  renderFiles(currentFiles);
 }
 
 function renderFiles(files) {
   const root = document.getElementById("files");
   root.innerHTML = "";
 
-  files.forEach(f => {
-    const fullPath = currentPath + "/" + f.name;
+  if (!files || files.length === 0) {
+    root.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center; color:#888;">
+          Empty folder
+        </td>
+      </tr>
+    `;
+    return;
+  }
 
-    const div = document.createElement("div");
+  updateBreadcrumbs();
 
-    div.textContent = f.name + (f.isDir ? "/" : "");
+  files.forEach((f, index) => {
+    const fullPath = currentPath === "/"
+      ? "/" + f.name
+      : currentPath + "/" + f.name;
 
-    div.style.cursor = "pointer";
+    const tr = document.createElement("tr");
 
-    // выделение
-    if (selected === fullPath) {
-      div.style.background = "#ddd";
+    if (selectedSet.has(fullPath)) {
+      tr.classList.add("selected");
     }
 
-    div.onclick = () => {
-      selected = fullPath;
+    // CLICK LOGIC (Explorer)
+    tr.onclick = (e) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
+
+      if (isShift && lastSelectedIndex !== null) {
+        // range select
+        selectedSet.clear();
+
+        const start = Math.min(lastSelectedIndex, index);
+        const end = Math.max(lastSelectedIndex, index);
+
+        for (let i = start; i <= end; i++) {
+          const file = files[i];
+          const p = currentPath === "/"
+            ? "/" + file.name
+            : currentPath + "/" + file.name;
+
+          selectedSet.add(p);
+        }
+
+      } else if (isCtrl) {
+        // toggle
+        if (selectedSet.has(fullPath)) {
+          selectedSet.delete(fullPath);
+        } else {
+          selectedSet.add(fullPath);
+        }
+
+        lastSelectedIndex = index;
+
+      } else {
+        // single select
+        selectedSet.clear();
+        selectedSet.add(fullPath);
+        lastSelectedIndex = index;
+      }
+
       renderFiles(files);
     };
 
-    // открытие по двойному клику
-    div.ondblclick = () => {
+    // DOUBLE CLICK
+    tr.ondblclick = () => {
       if (f.isDir) {
         loadDir(fullPath);
       } else {
@@ -49,24 +98,99 @@ function renderFiles(files) {
       }
     };
 
-    // delete & download
-    const del = document.createElement("button");
-    del.textContent = "❌";
-    del.onclick = async (e) => {
-      e.stopPropagation();
-      await deleteItem(fullPath);
-    };
-    const download = document.createElement("button");
-    download.textContent = "⬇️";
-    download.onclick = (e) => {
-    e.stopPropagation();
-    window.open(`/api/download?path=${encodeURIComponent(fullPath)}`);
+    // checkbox
+    const checkTd = document.createElement("td");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selectedSet.has(fullPath);
+
+    checkbox.onclick = (e) => e.stopPropagation();
+
+    checkbox.onchange = () => {
+      if (checkbox.checked) {
+        selectedSet.add(fullPath);
+      } else {
+        selectedSet.delete(fullPath);
+      }
+
+      renderFiles(files);
     };
 
-    div.appendChild(download);
-    div.appendChild(del);
-    root.appendChild(div);
+    checkTd.appendChild(checkbox);
+
+    // name
+    const nameTd = document.createElement("td");
+    nameTd.textContent = f.name;
+
+    // type
+    const typeTd = document.createElement("td");
+    typeTd.textContent = f.isDir ? "Folder" : "File";
+
+    // size
+    const sizeTd = document.createElement("td");
+    sizeTd.textContent = "—";
+
+    // modified
+    const modTd = document.createElement("td");
+    modTd.textContent = "—";
+
+    // actions
+    const actTd = document.createElement("td");
+
+    const dl = document.createElement("button");
+    dl.textContent = "⬇️";
+    dl.onclick = (e) => {
+      e.stopPropagation();
+      window.open(`/api/download?path=${encodeURIComponent(fullPath)}`);
+    };
+
+    actTd.appendChild(dl);
+
+    tr.appendChild(checkTd);
+    tr.appendChild(nameTd);
+    tr.appendChild(typeTd);
+    tr.appendChild(sizeTd);
+    tr.appendChild(modTd);
+    tr.appendChild(actTd);
+
+    root.appendChild(tr);
   });
+}
+
+function toggleAll(el) {
+  const checkboxes = document.querySelectorAll("#files input[type=checkbox]");
+
+  if (el.checked) {
+    selectedSet.clear();
+
+    currentFiles.forEach(f => {
+      const fullPath = currentPath === "/"
+        ? "/" + f.name
+        : currentPath + "/" + f.name;
+
+      selectedSet.add(fullPath);
+    });
+  } else {
+    selectedSet.clear();
+  }
+
+  renderFiles(currentFiles); 
+}
+
+function updateBreadcrumbs() {
+  const el = document.getElementById("breadcrumbs");
+  el.textContent = "Home " + currentPath;
+}
+
+async function deleteSelected() {
+  const arr = Array.from(selectedSet);
+
+  for (const p of arr) {
+    await deleteItem(p);
+  }
+
+  selectedSet.clear();
+  loadDir(currentPath);
 }
 
 async function openFile(path) {
@@ -133,31 +257,31 @@ function goUp() {
 }
 
 function copySelected() {
-  if (!selected) {
+  if (selectedSet.size === 0) {
     alert("Nothing selected");
     return;
   }
 
   clipboard = {
     type: "copy",
-    path: selected
+    paths: Array.from(selectedSet)
   };
 
-  alert("Copied: " + selected);
+  alert("Copied");
 }
 
 function moveSelected() {
-  if (!selected) {
+  if (selectedSet.size === 0) {
     alert("Nothing selected");
     return;
   }
 
   clipboard = {
     type: "move",
-    path: selected
+    paths: Array.from(selectedSet)
   };
 
-  alert("Move: " + selected);
+  alert("Move ready");
 }
 
 async function paste() {
@@ -166,38 +290,24 @@ async function paste() {
     return;
   }
 
-  const name = clipboard.path.split("/").pop();
-  const destination = currentPath + "/" + name;
+  for (const src of clipboard.paths) {
+    const name = src.split("/").pop();
+    const dst = currentPath + "/" + name;
 
-  let url = "/api/copy";
+    const url = clipboard.type === "move" ? "/api/move" : "/api/copy";
 
-  if (clipboard.type === "move") {
-    url = "/api/move";
-  }
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      src: clipboard.path,
-      dst: destination
-    })
-  });
-
-  const data = await res.json();
-
-  if (!data.success) {
-    alert(data.error);
-    return;
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ src, dst })
+    });
   }
 
   if (clipboard.type === "move") {
     clipboard = null;
-    selected = null;
   }
 
+  selectedSet.clear();
   loadDir(currentPath);
 }
 

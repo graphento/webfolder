@@ -1,6 +1,7 @@
 import { globalElementSelector } from "./shared/scripts/element_selection.mjs";
 import { wfApi } from "./shared/scripts/wf_api_tmp.mjs";
 import { keybindManager } from "./shared/scripts/keybind.mjs";
+import { getNameFromPath } from "./shared/scripts/path_utils.mjs";
 
 class WfManager {
   #path;
@@ -45,6 +46,28 @@ class WfManager {
             "browser__entry__type",
           )) {
             element.innerText = entry.isDir ? "Папка" : "Файл";
+          }
+
+          function formatSize(bytes) {
+            if (!bytes) return "0 B";
+
+            const sizes = ["B", "KB", "MB", "GB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+
+            return (bytes / Math.pow(1024, i)).toFixed(1) + " " + sizes[i];
+          }
+
+          for (const element of entryElement.getElementsByClassName(
+            "browser__entry__size",
+          )) {
+            if (entry.isDir) continue;
+            element.innerText = formatSize(entry.size);
+          }
+
+          for (const element of entryElement.getElementsByClassName(
+            "browser__entry__mtime",
+          )) {
+            element.innerText = new Date(entry.mtime).toLocaleString();
           }
 
           container.appendChild(entryElement);
@@ -128,7 +151,13 @@ class WfManager {
     switch (clipboard.action) {
       case "cut":
         Promise.all(
-          clipboard.src.map((path) => wfApi.move(path, wfManager.path)),
+          clipboard.src.map((path) => {
+            console.log(wfManager.path + getNameFromPath(path));
+            return wfApi.move(
+              path,
+              wfManager.path + "/" + getNameFromPath(path),
+            );
+          }),
         ).then((results) => {
           for (const res of results) {
             if (!res.success) {
@@ -143,7 +172,13 @@ class WfManager {
 
       case "copy":
         Promise.all(
-          clipboard.src.map((path) => wfApi.copy(path, wfManager.path)),
+          clipboard.src.map((path) => {
+            console.log(wfManager.path + getNameFromPath(path));
+            return wfApi.move(
+              path,
+              wfManager.path + "/" + getNameFromPath(path),
+            );
+          }),
         ).then((results) => {
           for (const res of results) {
             if (!res.success) {

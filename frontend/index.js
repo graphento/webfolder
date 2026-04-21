@@ -3,6 +3,8 @@ let clipboard = null;
 let currentPath = "/";
 let currentFiles = [];
 let lastSelectedIndex = null;
+import { getNameFromPath } from "./shared/scripts/path_utils.mjs";
+import { wfApi } from "./shared/scripts/wf_api_tmp.mjs";
 
 async function loadDir(path) {
   const res = await fetch(`/api/read_dir?path=${encodeURIComponent(path)}`);
@@ -128,11 +130,20 @@ function renderFiles(files) {
 
     // size
     const sizeTd = document.createElement("td");
-    sizeTd.textContent = "—";
+    sizeTd.textContent = f.isDir || !f.size ? "—" : formatSize(f.size);
 
     // modified
     const modTd = document.createElement("td");
-    modTd.textContent = "—";
+    modTd.textContent = f.mtime ? new Date(f.mtime).toLocaleString() : "—";
+
+    function formatSize(bytes) {
+      if (!bytes) return "0 B";
+
+      const sizes = ["B", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+
+      return (bytes / Math.pow(1024, i)).toFixed(1) + " " + sizes[i];
+    }
 
     // actions
     const actTd = document.createElement("td");
@@ -291,8 +302,10 @@ async function paste() {
   }
 
   for (const src of clipboard.paths) {
-    const name = src.split("/").pop();
-    const dst = currentPath + "/" + name;
+    const name = getNameFromPath(src); 
+    const dst = currentPath === "/" 
+      ? "/" + name 
+      : currentPath + "/" + name;
 
     const url = clipboard.type === "move" ? "/api/move" : "/api/copy";
 
@@ -320,23 +333,22 @@ async function uploadFile() {
     return;
   }
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("path", currentPath);
-
-  const res = await fetch("/api/upload", {
-    method: "POST",
-    body: formData
-  });
-
-  const data = await res.json();
-
-  if (!data.success) {
-    alert(data.error);
+  const res = await wfApi.upload(file, currentPath); 
+  if (!res.success) {
+    alert(res.error);
   }
 
   input.value = "";
   loadDir(currentPath);
 }
+
 // init
 loadDir("/");
+
+window.deleteSelected = deleteSelected;
+window.uploadFile = uploadFile;
+window.copySelected = copySelected;
+window.moveSelected = moveSelected;
+window.paste = paste;
+window.toggleAll = toggleAll;
+window.goUp = goUp;

@@ -14,10 +14,29 @@ export async function readDir(userPath) {
 
     const entries = await fs.readdir(fullPath, { withFileTypes: true });
 
-    const contents = entries.map(e => ({
-      name: e.name,
-      isDir: e.isDirectory()
-    }));
+    const contents = [];
+
+    for (const e of entries) {
+      const entryPath = path.join(fullPath, e.name);
+
+      let size = null;
+      let mtime = null;
+
+      try {
+        const stat = await fs.stat(entryPath);
+        size = stat.size;
+        mtime = stat.mtime;
+      } catch (err) {
+        console.warn("stat error:", entryPath, err.message);
+      }
+
+      contents.push({
+        name: e.name,
+        isDir: e.isDirectory(),
+        size,
+        mtime
+      });
+    }
 
     return { success: true, contents };
   } catch (e) {

@@ -87,7 +87,7 @@ class WfApiTmp {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("path", path);
-    const res = await fetch("/api/upload", {
+    const res = await fetch(url, {
       method: "POST",
       body: formData,
     });

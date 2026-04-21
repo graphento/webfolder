@@ -51,7 +51,7 @@ body {
 
 /* convenience */
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 td.centered {
@@ -254,7 +254,7 @@ td.centered {
 .browser__view td,
 .browser__view th {
   padding: 0 4px;
-    white-space: nowrap;
+  white-space: nowrap;
 }
 
 .browser__header {
@@ -281,6 +281,34 @@ td.centered {
   width: 100%;
   box-sizing: border-box;
   color: var(--canvas-text-color);
+}
+
+.browser__contextmenu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 1px;
+  background-color: var(--canvas-color);
+  border: 1px solid var(--border-color);
+}
+
+.browser__contextmenu__action {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 4px;
+  gap: 4px;
+}
+
+.browser__contextmenu__action:hover {
+  background-color: var(--canvas-highlight-color);
+}
+
+.browser__contextmenu__action__icon {
+  height: 16px;
+  color: var(--accent-color);
+  aspect-ratio: 1 / 1;
 }
 
 .footer {

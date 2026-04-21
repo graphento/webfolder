@@ -174,7 +174,7 @@ class WfManager {
         Promise.all(
           clipboard.src.map((path) => {
             console.log(wfManager.path + getNameFromPath(path));
-            return wfApi.move(
+            return wfApi.copy(
               path,
               wfManager.path + "/" + getNameFromPath(path),
             );

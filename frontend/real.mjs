@@ -87,81 +87,105 @@ class WfManager {
     this.#path = path;
     this.updateDirView();
   }
+
+  copySelected() {
+    wfManager.clipboard = {
+      action: "copy",
+      src: [...wfManager.selection],
+    };
+    console.log(wfManager.clipboard);
+  }
+
+  cutSelected() {
+    wfManager.clipboard = {
+      action: "cut",
+      src: [...wfManager.selection],
+    };
+    console.log(wfManager.clipboard);
+  }
+
+  deleteSelected() {
+    console.log(wfManager.selection);
+    Promise.all(
+      wfManager.selection.map((path) => wfApi.delete(path, wfManager.path)),
+    ).then((results) => {
+      for (const res of results) {
+        if (!res.success) {
+          alert("Failed to delete: " + res.error);
+          wfManager.updateDirView();
+          return;
+        }
+      }
+      wfManager.updateDirView();
+    });
+  }
+
+  pasteClipboard() {
+    if (!wfManager.clipboard) return;
+
+    const clipboard = structuredClone(wfManager.clipboard);
+
+    switch (clipboard.action) {
+      case "cut":
+        Promise.all(
+          clipboard.src.map((path) => wfApi.move(path, wfManager.path)),
+        ).then((results) => {
+          for (const res of results) {
+            if (!res.success) {
+              alert("Failed to move: " + res.error);
+              wfManager.updateDirView();
+              return;
+            }
+          }
+          wfManager.updateDirView();
+        });
+        break;
+
+      case "copy":
+        Promise.all(
+          clipboard.src.map((path) => wfApi.copy(path, wfManager.path)),
+        ).then((results) => {
+          for (const res of results) {
+            if (!res.success) {
+              alert("Failed to copy: " + res.error);
+              wfManager.updateDirView();
+              return;
+            }
+          }
+          wfManager.updateDirView();
+        });
+        break;
+    }
+  }
+
+  downloadSelected() {
+    for (const path of wfManager.selection) {
+      wfApi.browserDownloadFile(path);
+    }
+  }
+
+  promptUpload() {
+    const input = document.createElement("input");
+    input.type = "file";
+
+    input.onchange = (e) => {
+      wfApi.upload(e.target.files[0], wfManager.path).then((res) => {
+        if (!res.success) {
+          alert("Failed to upload: " + res.error);
+          return;
+        }
+        wfManager.updateDirView();
+      });
+    };
+
+    input.click();
+  }
 }
 
 const wfManager = new WfManager("/");
 
-keybindManager.bindCtrl("KeyC", () => {
-  wfManager.clipboard = {
-    action: "copy",
-    src: [...wfManager.selection],
-  };
-  console.log(wfManager.clipboard);
-});
-
-keybindManager.bindCtrl("KeyX", () => {
-  wfManager.clipboard = {
-    action: "cut",
-    src: [...wfManager.selection],
-  };
-  console.log(wfManager.clipboard);
-});
-
-keybindManager.bindSingle("Delete", () => {
-  console.log(wfManager.selection);
-  Promise.all(
-    wfManager.selection.map((path) => wfApi.delete(path, wfManager.path)),
-  ).then((results) => {
-    for (const res of results) {
-      if (!res.success) {
-        alert("Failed to delete: " + res.error);
-        wfManager.updateDirView();
-        return;
-      }
-    }
-    wfManager.updateDirView();
-  });
-});
-
-keybindManager.bindCtrl("KeyV", () => {
-  if (!wfManager.clipboard) return;
-
-  const clipboard = structuredClone(wfManager.clipboard);
-
-  switch (clipboard.action) {
-    case "cut":
-      Promise.all(
-        clipboard.src.map((path) => wfApi.move(path, wfManager.path)),
-      ).then((results) => {
-        for (const res of results) {
-          if (!res.success) {
-            alert("Failed to move: " + res.error);
-            wfManager.updateDirView();
-            return;
-          }
-        }
-        wfManager.updateDirView();
-      });
-      break;
-
-    case "copy":
-      Promise.all(
-        clipboard.src.map((path) => wfApi.copy(path, wfManager.path)),
-      ).then((results) => {
-        for (const res of results) {
-          if (!res.success) {
-            alert("Failed to copy: " + res.error);
-            wfManager.updateDirView();
-            return;
-          }
-        }
-        wfManager.updateDirView();
-      });
-      break;
-  }
-});
-
-globalElementSelector.forEachWithClass("browser__view", (view) => {
+globalElementSelector.forEachWithClass("browser", (browser) => {
+  const view = browser.getElementsByClassName("browser__view")[0];
   for (const multiselector of view.getElementsByClassName(
     "browser__selectall",
   )) {
@@ -173,7 +197,95 @@ globalElementSelector.forEachWithClass("browser__view", (view) => {
       }
     });
   }
+
+  const contextMenu = browser.getElementsByClassName("browser__contextmenu")[0];
+
+  browser.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    const x = event.clientX;
+    const y = event.clientY;
+
+    contextMenu.classList.remove("hidden");
+
+    if (x + contextMenu.offsetWidth < window.innerWidth) {
+      contextMenu.style.left = x + "px";
+    } else {
+      contextMenu.style.left = x - contextMenu.offsetWidth + "px";
+    }
+
+    if (y + contextMenu.offsetHeight < window.innerHeight) {
+      contextMenu.style.top = y + "px";
+    } else {
+      contextMenu.style.top = y - contextMenu.offsetHeight + "px";
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    contextMenu.classList.add("hidden");
+  });
 });
+
+keybindManager.bindCtrl("KeyC", () => {
+  wfManager.copySelected();
+});
+keybindManager.bindCtrl("KeyX", () => {
+  wfManager.cutSelected();
+});
+keybindManager.bindSingle("Delete", () => {
+  wfManager.deleteSelected();
+});
+keybindManager.bindCtrl("KeyV", () => {
+  wfManager.pasteClipboard();
+});
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--copy",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.copySelected());
+  },
+);
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--cut",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.cutSelected());
+  },
+);
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--paste",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.pasteClipboard());
+  },
+);
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--delete",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.deleteSelected());
+  },
+);
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--delete",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.deleteSelected());
+  },
+);
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--download",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.downloadSelected());
+  },
+);
+
+globalElementSelector.forEachWithClass(
+  "browser__contextmenu__action--upload",
+  (button) => {
+    button.addEventListener("click", (event) => wfManager.promptUpload());
+  },
+);
 
 globalElementSelector.forEachWithClass("header__path__input", (input) => {
   input.addEventListener("change", (event) => {

@@ -4,8 +4,10 @@ import pathutils from "./pathutils.js";
 import userprompt from "./userprompt.js";
 
 function toValidAbsPath(path) {
-  if (!pathutils.isAbsolute(path)) return null;
-  return pathutils.toValid(path);
+  if (!pathutils.isAbsolute(path)) throw new Error("Path must be absolute");
+  const valid = pathutils.toValid(path);
+  if (!valid) throw new Error("Invalid path");
+  return valid;
 }
 
 function formatDate(ms) {

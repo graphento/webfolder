@@ -133,8 +133,20 @@
   border-bottom: 1px solid rgb(67, 70, 86);
 }
 
+.listView_table_body {
+  transition: background-color 0.1s;
+}
+
+.listView_table_body.drag-over {
+  background-color: rgb(64, 77, 97);
+}
+
 .listView_entry:hover {
   background-color: rgb(67, 70, 86);
+}
+
+.listView_entry.drag-over {
+  background-color: rgb(64, 77, 97);
 }
 
 /* #endregion Theme */
@@ -389,7 +401,7 @@ body {
 
 .listView {
   margin: 16px;
-  --column-name-width: 126px;
+  --column-name-width: 200px;
   --column-mtime-width: 150px;
   --column-size-width: 90px;
 }
@@ -450,6 +462,7 @@ body {
 .listView_table_body {
   display: flex;
   flex-direction: column;
+  padding-bottom: 90px;
 }
 
 .listView_entry {
@@ -458,7 +471,7 @@ body {
 
 .listView_header_name,
 .listView_entry_name {
-  width: var(--column-name-width);
+  width: max(22rch, var(--column-name-width));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -466,7 +479,7 @@ body {
 
 .listView_header_mtime,
 .listView_entry_mtime {
-  width: max(16ch, var(--column-mtime-width));
+  width: max(16rch, var(--column-mtime-width));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -474,7 +487,7 @@ body {
 
 .listView_header_size,
 .listView_entry_size {
-  width: max(7ch, var(--column-size-width));
+  width: max(7rch, var(--column-size-width));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -89,7 +89,7 @@ const pathutils = Object.freeze({
       stack.push(part);
     }
     let normalized = stack.join("/");
-    if (pathutils.isAbsolute(normalized)) normalized = "/" + normalized;
+    if (pathutils.isAbsolute(path)) normalized = "/" + normalized;
     if (pathutils.filename(normalized) === "") normalized += "/";
     return normalized;
   },
@@ -108,7 +108,9 @@ const pathutils = Object.freeze({
    * @param {string} path
    */
   dirs(path) {
-    const parts = path.split(/[\\\/]+/).filter(Boolean);
+    const parts = path.split(/[\\\/]+/);
+    if (parts[0] === "") parts.shift();
+    parts.pop();
     return parts;
   },
 });

@@ -6,6 +6,23 @@ import wfapi from "./shared/scripts/fakewfapi.js";
 
 const qwnew = qw.new;
 
+function formatSize(bytes) {
+  console.log(bytes);
+  const units = ["KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+
+  if (unitIndex === 0) return `${Math.max(1, Math.round(value))} KB`;
+  if (value < 10) return `${value.toFixed(2)} ${units[unitIndex]}`;
+  if (value < 100) return `${value.toFixed(1)} ${units[unitIndex]}`;
+  return `${Math.round(value)} ${units[unitIndex]}`;
+}
+
 class Webfolder {
   constructor() {
     this.main = qw.one(".main");
@@ -62,17 +79,79 @@ class Webfolder {
             qwnew("div.listView_header_mtime").append("Дата изменения"),
             qwnew("div.listView_header_size").append("Размер"),
           ),
-          qwnew("div.listView_table_body").append(
-            ...entries.map((e) =>
-              qwnew("button.listView_entry")
-                .set("type", "button")
-                .append(
-                  qwnew("div.listView_entry_name").append(e.name),
-                  qwnew("div.listView_entry_mtime").append(e.mtime),
-                  qwnew("div.listView_entry_size").append(e.size),
+          qwnew("div.listView_table_body")
+            .on("dragover", (e) => {
+              e.preventDefault();
+              e.currentTarget.classList.add("drag-over");
+            })
+            .on("drop", (e) => {
+              e.preventDefault();
+              Promise.all(
+                [...e.dataTransfer.files].map((file) =>
+                  wfapi.writeFile(pathutils.join(path, file.name), file),
                 ),
+              ).then(() => {
+                this.showListView(path);
+              });
+            })
+            .on("dragleave", (e) => {
+              e.preventDefault();
+              e.currentTarget.remove("drag-over");
+            })
+            .append(
+              ...entries.map((e) => {
+                const isDir = e.metadata.mimetype === "inode/directory";
+                const entryPath = isDir
+                  ? pathutils.join(path, e.name + "/")
+                  : pathutils.join(path, e.name);
+
+                const element = qwnew("button.listView_entry")
+                  .set("type", "button")
+                  .append(
+                    qwnew("div.listView_entry_name").append(e.name),
+                    qwnew("div.listView_entry_mtime").append(e.metadata.mtime),
+                    qwnew("div.listView_entry_size").append(
+                      isDir ? "-" : formatSize(e.metadata.size),
+                    ),
+                  );
+
+                if (isDir) {
+                  element
+                    .on("click", () => {
+                      this.showListView(entryPath);
+                    })
+                    .on("dragover", (e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.add("drag-over");
+                    })
+                    .on("drop", (e) => {
+                      e.preventDefault();
+                      Promise.all(
+                        [...e.dataTransfer.files].map((file) =>
+                          wfapi.writeFile(
+                            pathutils.join(entryPath, file.name),
+                            file,
+                          ),
+                        ),
+                      );
+                    })
+                    .on("dragleave", (e) => {
+                      e.preventDefault();
+                      e.currentTarget.remove("drag-over");
+                    });
+                } else {
+                  element
+                    .on("click", () => {
+                      wfapi.downloadFile(entryPath);
+                    })
+                    .on("drag", (e) => {
+                      e.dataTransfer.setData("text/plain", entryPath);
+                    });
+                }
+
+                return element;
+              }),
             ),
-          ),
         ),
       ),
     );

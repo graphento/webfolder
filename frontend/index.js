@@ -11,16 +11,19 @@ function joinPath(base, name) {
 }
 
 function formatSize(bytes) {
-  if (!bytes) return "—";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
+  console.log(bytes);
+  const units = ["KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+  let value = bytes / 1024;
   let unitIndex = 0;
+
   while (value >= 1024 && unitIndex < units.length - 1) {
     value /= 1024;
     unitIndex++;
   }
-  if (unitIndex === 0) return `${Math.round(value)} ${units[0]}`;
-  if (value < 10) return `${value.toFixed(1)} ${units[unitIndex]}`;
+
+  if (unitIndex === 0) return `${Math.max(1, Math.round(value))} KB`;
+  if (value < 10) return `${value.toFixed(2)} ${units[unitIndex]}`;
+  if (value < 100) return `${value.toFixed(1)} ${units[unitIndex]}`;
   return `${Math.round(value)} ${units[unitIndex]}`;
 }
 
@@ -400,7 +403,9 @@ class Webfolder {
                         qwnew("div.listView_entry_type").append(
                           isDir ? "Папка" : "Файл",
                         ),
-                        qwnew("div.listView_entry_mtime").append(e.metadata.mtime),
+                        qwnew("div.listView_entry_mtime").append(
+                          e.metadata.mtime,
+                        ),
                         qwnew("div.listView_entry_size").append(
                           isDir ? "—" : formatSize(e.metadata.size),
                         ),

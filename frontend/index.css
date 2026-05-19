@@ -149,6 +149,81 @@
   background-color: rgb(64, 77, 97);
 }
 
+.listView_entry_selected {
+  background-color: rgb(51, 70, 110);
+}
+
+.listView_contextmenu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  border: 1px solid rgb(67, 70, 86);
+  border-radius: 8px;
+  background-color: rgb(26, 28, 31);
+  padding: 4px;
+}
+
+.listView_contextmenu.hidden {
+  display: none;
+}
+
+.listView_contextmenu_action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.listView_contextmenu_action:hover {
+  background-color: rgb(67, 70, 86);
+}
+
+.listView_contextmenu_icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.listView_empty {
+  padding: 24px;
+  color: rgb(123, 125, 137);
+  text-align: center;
+}
+
+.listView_selectall,
+.listView_entry_select {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.listView_header_type,
+.listView_entry_type {
+  width: 8ch;
+}
+
+.listView {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 120px);
+}
+
+.listView_table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.listView_table_body {
+  flex: 1;
+  min-height: 200px;
+}
+
 /* #endregion Theme */
 
 /* #region Globals */

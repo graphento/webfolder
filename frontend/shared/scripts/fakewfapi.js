@@ -4,27 +4,21 @@ import pathutils from "./pathutils.js";
 import userprompt from "./userprompt.js";
 
 function toValidAbsPath(path) {
-  if (!pathutils.isAbsolute(path)) throw new Error("Path must be absolute");
-  const valid = pathutils.toValid(path);
-  if (!valid) throw new Error("Invalid path");
-  return valid;
-}
-
-function formatDate(ms) {
-  const d = new Date(ms);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const MM = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}.${MM}.${yyyy} ${hh}:${mm}`;
+  if (!path || typeof path !== "string") return null;
+  const abs = pathutils.toAbsolute(path);
+  return pathutils.toValid(abs);
 }
 
 const opfs = {
-  /**
-   * @param {string} path
-   * @param {boolean} create
-   */
+  splitPath(absPath) {
+    let p = absPath.replace(/\/+$/, "");
+    if (p === "" || p === "/") return { parentPath: "/", name: "" };
+    const idx = p.lastIndexOf("/");
+    const name = p.slice(idx + 1);
+    const parentPath = idx <= 0 ? "/" : p.slice(0, idx);
+    return { parentPath, name };
+  },
+
   async getDir(path, create = false) {
     let current = await navigator.storage.getDirectory();
     for (const dir of pathutils.dirs(path)) {
@@ -33,32 +27,34 @@ const opfs = {
     return current;
   },
 
-  /**
-   * @param {string} path
-   * @param {boolean} create
-   */
-  async getFile(path, create = false) {
-    const dir = await opfs.getDir(path, create);
-    return await dir.getFileHandle(pathutils.filename(path), { create });
+  async getDirectoryAt(path, create = false) {
+    const { parentPath, name } = opfs.splitPath(path);
+    if (!name) return opfs.getDir("/");
+    const parent = await opfs.getDir(parentPath, create);
+    return parent.getDirectoryHandle(name, { create });
   },
 
-  // /**
-  //  * @param {string} path
-  //  */
-  // async getEntry(path) {
-  //   const dir = await opfs.getDir(path);
-  //   const filename = pathutils.filename(path);
-  //   try {
-  //     return await dir.getFileHandle(filename);
-  //   } catch {
-  //     return await dir.getDirectoryHandle(filename);
-  //   }
-  // },
+  async getFile(path, create = false) {
+    const { parentPath, name } = opfs.splitPath(path);
+    if (!name) throw new Error("Invalid file path");
+    const parent = await opfs.getDir(parentPath, create);
+    return parent.getFileHandle(name, { create });
+  },
 
-  /**
-   * @param {FileSystemFileHandle} dst
-   * @param {FileSystemWriteChunkType} data
-   */
+  async entryKind(path) {
+    const { parentPath, name } = opfs.splitPath(path);
+    if (!name) return "directory";
+    const parent = await opfs.getDir(parentPath);
+    try {
+      await parent.getDirectoryHandle(name);
+      return "directory";
+    } catch (e) {
+      if (e.name === "TypeMismatchError") return "file";
+      if (e.name === "NotFoundError") return null;
+      throw e;
+    }
+  },
+
   async writeFile(dst, data) {
     const stream = await dst.createWritable();
     await stream.truncate(0);
@@ -66,26 +62,15 @@ const opfs = {
     await stream.close();
   },
 
-  /**
-   * @param {FileSystemFileHandle} src
-   * @param {FileSystemFileHandle} dst
-   */
   async copyFileContents(src, dst) {
     await opfs.writeFile(dst, await src.getFile());
   },
 
-  /**
-   * @param {FileSystemFileHandle} src
-   * @param {FileSystemDirectoryHandle} dst
-   */
   async copyFileToDir(src, dst) {
-    await opfs.writeFile(dst.getFileHandle(src.name), await src.getFile());
+    const dstFile = await dst.getFileHandle(src.name, { create: true });
+    await opfs.writeFile(dstFile, await src.getFile());
   },
 
-  /**
-   * @param {FileSystemDirectoryHandle} src
-   * @param {FileSystemDirectoryHandle} dst
-   */
   async copyDirContents(src, dst) {
     for await (const [name, handle] of src.entries()) {
       if (handle.kind === "file") {
@@ -99,187 +84,174 @@ const opfs = {
     }
   },
 
-  /**
-   * @param {string} src
-   * @param {string} dst
-   */
   async copy(src, dst) {
-    const srcFilename = pathutils.filename(src);
-    const dstFilename = pathutils.filename(dst);
-    if (srcFilename && dstFilename) {
-      await opfs.copyFileContents(src, dst);
-    } else if (srcFilename) {
-      await opfs.copyFileToDir(src, dst);
-    } else if (dstFilename) {
-      throw new Error("Can't move a directory into a file");
-    } else {
-      await opfs.copyDirContents(src, dst);
+    const kind = await opfs.entryKind(src);
+    if (kind === "file") {
+      const srcHandle = await opfs.getFile(src);
+      const dstKind = await opfs.entryKind(dst);
+      if (dstKind === "directory") {
+        const dstDir = await opfs.getDirectoryAt(dst, true);
+        await opfs.copyFileToDir(srcHandle, dstDir);
+      } else {
+        const dstHandle = await opfs.getFile(dst, true);
+        await opfs.copyFileContents(srcHandle, dstHandle);
+      }
+      return;
     }
+
+    const srcDir = await opfs.getDirectoryAt(src);
+    const dstDir = await opfs.getDirectoryAt(dst, true);
+    await opfs.copyDirContents(srcDir, dstDir);
   },
 
-  /**
-   * @param {string} src
-   */
   async delete(src) {
-    const dir = await opfs.getDir(src);
-    const filename = pathutils.filename(src);
-    await dir.removeEntry(filename, { recursive: true });
+    const { parentPath, name } = opfs.splitPath(src);
+    if (!name) throw new Error("Cannot delete root");
+    const parent = await opfs.getDir(parentPath);
+    await parent.removeEntry(name, { recursive: true });
   },
 };
 
 const api = Object.freeze({
-  /**
-   * @param {string} dst
-   */
   async createFile(dst) {
     dst = toValidAbsPath(dst);
+    if (!dst) throw new Error("Invalid path");
     await opfs.getFile(dst, true);
   },
 
-  /**
-   * @param {string} dst
-   * @param {FileSystemWriteChunkType} data
-   */
   async writeFile(dst, data) {
     dst = toValidAbsPath(dst);
+    if (!dst) throw new Error("Invalid path");
     const file = await opfs.getFile(dst, true);
     await opfs.writeFile(file, data);
   },
 
-  /**
-   * @param {string} dst
-   */
   async createDir(dst) {
     dst = toValidAbsPath(dst);
-    await opfs.getDir(dst, true);
+    if (!dst) throw new Error("Invalid path");
+    await opfs.getDirectoryAt(dst, true);
   },
 
-  /**
-   * @param {string} dst
-   */
   async uploadFile(dst) {
     const file = await userprompt.selectFile();
     if (!file) return;
-    await api.writeFile(pathutils.join(dst, file.name), file);
+    const base = toValidAbsPath(dst) || "/";
+    await api.writeFile(pathutils.join(base, file.name), file);
   },
 
-  /**
-   * @param {string} dst
-   */
   async uploadDir(dst) {
+    const base = toValidAbsPath(dst) || "/";
     const files = await userprompt.selectDir();
     if (!files) return;
+    if (files.length === 0) {
+      throw new Error(
+        "Папка пуста. Используйте «Создать папку» или выберите папку с файлами",
+      );
+    }
     for (const file of files) {
-      const relativePath = pathutils.popFront(file.webkitRelativePath).rest;
-      api.writeFile(pathutils.join(dst, relativePath), file);
+      await api.writeFile(pathutils.join(base, file.webkitRelativePath), file);
     }
   },
 
-  /**
-   * @param {string} src
-   */
   async downloadFile(src) {
+    src = toValidAbsPath(src);
+    if (!src) throw new Error("Invalid path");
+    if ((await opfs.entryKind(src)) === "directory") {
+      throw new Error("Скачивание папок пока не поддерживается");
+    }
     const handle = await opfs.getFile(src);
     const file = await handle.getFile();
     await userprompt.downloadBlob(file, file.name);
   },
 
-  /**
-   * @param {string} src
-   */
-  downloadDir(src) {
+  downloadDir() {
     throw new Error("Download dir not implemented");
   },
 
-  /**
-   * @param {string} src
-   */
   async readFile(src, start = 0, length = -1) {
     src = toValidAbsPath(src);
+    if (!src) throw new Error("Invalid path");
     const handle = await opfs.getFile(src);
     const file = await handle.getFile();
-    const buffer = await file.arrayBuffer();
-
     if (start === 0 && length === -1) {
       return new Uint8Array(await file.arrayBuffer());
     }
-
     const end = length === -1 ? file.size : Math.min(start + length, file.size);
-    const slice = file.slice(start, end);
-    return new Uint8Array(await slice.arrayBuffer());
+    return new Uint8Array(await (await file.slice(start, end)).arrayBuffer());
   },
 
-  /**
-   * @param {string} src
-   */
   async readDir(src) {
     src = toValidAbsPath(src);
-    const dir = await opfs.getDir(src);
+    if (!src) throw new Error("Invalid path");
+    const dir = await opfs.getDirectoryAt(src);
     const entries = [];
     for await (const [name, handle] of dir.entries()) {
-      let metadata;
       if (handle.kind === "file") {
         const file = await handle.getFile();
-        metadata = {
-          size: file.size,
-          mimetype: file.type,
-          mtime: formatDate(file.lastModified),
-        };
+        entries.push({
+          name,
+          metadata: {
+            size: file.size,
+            mimetype: file.type,
+            mtime: formatDate(file.lastModified),
+          },
+        });
       } else {
-        metadata = {
-          size: 0,
-          mimetype: "inode/directory",
-          mtime: "N/A",
-        };
+        entries.push({
+          name,
+          metadata: {
+            size: 0,
+            mimetype: "inode/directory",
+            mtime: "N/A",
+          },
+        });
       }
-
-      entries.push({
-        name,
-        metadata,
-      });
     }
     return entries;
   },
 
-  /**
-   * @param {string} src
-   * @param {string} dst
-   */
   async move(src, dst) {
     src = toValidAbsPath(src);
     dst = toValidAbsPath(dst);
+    if (!src || !dst) throw new Error("Invalid path");
     if (src === dst) return;
-
     await opfs.copy(src, dst);
     await opfs.delete(src);
   },
 
-  /**
-   * @param {string} src
-   * @param {string} dst
-   */
   async copy(src, dst) {
     src = toValidAbsPath(src);
     dst = toValidAbsPath(dst);
+    if (!src || !dst) throw new Error("Invalid path");
     if (src === dst) return;
-
     await opfs.copy(src, dst);
   },
 
-  /**
-   * @param {string} src
-   */
   async delete(src) {
     src = toValidAbsPath(src);
+    if (!src) throw new Error("Invalid path");
     await opfs.delete(src);
   },
 
-  /**
-   * @param {string} src
-   */
+  async entryKind(path) {
+    const valid = toValidAbsPath(path);
+    if (!valid) return null;
+    return opfs.entryKind(valid);
+  },
+
   moveToTrash(src) {
-    return api.move(src, pathutils.join("/$RECYCLE.BIN/", src));
+    return api.move(src, pathutils.join("/$RECYCLE.BIN", pathutils.filename(src)));
   },
 });
+
+function formatDate(ms) {
+  const d = new Date(ms);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const MM = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}.${MM}.${yyyy} ${hh}:${mm}`;
+}
 
 export default api;

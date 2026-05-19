@@ -69,7 +69,16 @@ const pathutils = Object.freeze({
    * @param {string} path
    */
   join(start, end) {
-    return pathutils.dirname(start) + pathutils.toRelative(end);
+    const segments = [];
+    const add = (p) => {
+      for (const part of String(p).split(/[\\/]+/)) {
+        if (part && part !== ".") segments.push(part);
+      }
+    };
+    add(start);
+    add(end);
+    if (segments.length === 0) return "/";
+    return "/" + segments.join("/");
   },
 
   /**
@@ -108,10 +117,7 @@ const pathutils = Object.freeze({
    * @param {string} path
    */
   dirs(path) {
-    const parts = path.split(/[\\\/]+/);
-    if (parts[0] === "") parts.shift();
-    parts.pop();
-    return parts;
+    return path.split(/[\\\/]+/).filter(Boolean);
   },
 });
 

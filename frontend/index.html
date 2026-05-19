@@ -1,79 +1,179 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Webfolder</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webfolder</title>
+    <link rel="stylesheet" href="index.css" />
+    <script type="module" src="index.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <header class="sidebar_header">
+        <a href="./" class="sidebar_header_logo">Webfolder</a>
+        <div class="sidebar_header_phrase">
+          Твоя панель файлового управления
+        </div>
+      </header>
+      <nav class="sidebar_nav">
+        <a href="./index.html" class="sidebar_link">
+          <svg class="sidebar_link_icon">
+            <use href="./shared/components/icons.svg#dashboard"></use>
+          </svg>
+          Система
+        </a>
+        <!-- <a href="#history" class="sidebar_link">
+          <svg class="sidebar_link_icon">
+            <use href="./shared/components/icons.svg#recent"></use>
+          </svg>
+          История
+        </a>
+        <a href="#settings" class="sidebar_link">
+          <svg class="sidebar_link_icon">
+            <use href="./shared/components/icons.svg#settings"></use>
+          </svg>
+          Настройки
+        </a> -->
+      </nav>
+    </aside>
+    <div class="mainColumn">
+      <header class="header">
+        <div class="header_start">
+          <div class="header_search">
+            <svg class="header_search_icon">
+              <use href="./shared/components/icons.svg#search"></use>
+            </svg>
+            <input
+              type="text"
+              class="header_search_input"
+              placeholder="Поиск..."
+            />
+          </div>
+        </div>
+        <div class="header_end"></div>
+      </header>
+      <main class="main">
+        <div class="dashboard" style="display: none">
+          <section class="dashboard_section">
+            <div class="dashboard_section_title">Мониторинг</div>
+            <div class="dashboard_section_content">
+              <div class="dashboard_stats">
+                <div class="dashboard_stat">
+                  <header class="dashboard_stat_header">
+                    Процессор
+                    <svg class="dashboard_stat_icon">
+                      <use href="./shared/components/icons.svg#cpu"></use>
+                    </svg>
+                  </header>
+                  <main class="dashboard_stat_main">
+                    <div class="dashboard_cpu">
+                      <div class="dashboard_cpu_value">84 %</div>
+                    </div>
+                  </main>
+                </div>
+                <div class="dashboard_stat">
+                  <header class="dashboard_stat_header">
+                    Оперативка
+                    <svg class="dashboard_stat_icon">
+                      <use href="./shared/components/icons.svg#server"></use>
+                    </svg>
+                  </header>
+                  <main class="dashboard_stat_main">
+                    <div class="dashboard_ram">
+                      <div class="dashboard_ram_value">2.3 / 16 GB</div>
+                      <div class="dashboard_ram_progressbar">
+                        <div class="dashboard_ram_progressbar_value"></div>
+                      </div>
+                    </div>
+                  </main>
+                </div>
+                <div class="dashboard_stat">
+                  <header class="dashboard_stat_header">
+                    Сеть
+                    <svg class="dashboard_stat_icon">
+                      <use
+                        href="./shared/components/icons.svg#vertical-swap"
+                      ></use>
+                    </svg>
+                  </header>
+                  <main class="dashboard_stat_main">
+                    <div class="dashboard_network">
+                      <div class="dashboard_network_item">
+                        <div class="dashboard_network_up_title">tcp</div>
+                        <div class="dashboard_network_up_value">23</div>
+                      </div>
+                      <div class="dashboard_network_item">
+                        <div class="dashboard_network_down_title">udp</div>
+                        <div class="dashboard_network_down_value">6</div>
+                      </div>
+                    </div>
+                  </main>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="dashboard_section">
+            <div class="dashboard_section_title">Точки монтирования</div>
+            <div class="dashboard_section_content">
+              <div class="dashboard_mounts">
+                <a href="?path=C:/" class="dashboard_mount">
+                  <div class="dashboard_mount_header">
+                    <div class="dashboard_mount_title">C:/</div>
+                    <div class="dashboard_mount_filesystem">ntfs</div>
+                    <div class="dashboard_mount_space">
+                      123 GB free / 456 GB
+                    </div>
+                  </div>
+                  <div class="dashboard_mount_main"></div>
+                </a>
+              </div>
+            </div>
+          </section>
+        </div>
 
-<div class="app">
-
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <h2>Webfolder</h2>
-
-    <div class="section">
-      <p class="section-title">Quick Access</p>
-      <div class="item active">Home</div>
-      <div class="item">Recent</div>
-      <div class="item">Starred</div>
-      <div class="item">Trash</div>
+        <!-- <div class="listView" style="display: none;">
+          <header class="listView_header">
+            <div class="listView_path">
+              <button class="listView_path_item" type="button">C:</button>
+              /
+              <button class="listView_path_item" type="button">Windows</button>
+              /
+              <button class="listView_path_item" type="button">System32</button>
+              /
+              <button class="listView_path_item" type="button" disabled>
+                drivers
+              </button>
+            </div>
+            <div class="listView_actions">
+              <button type="button" class="listView_upload">
+                Загрузить
+                <svg class="listView_upload_icon">
+                  <use href="./shared/components/icons.svg#upload"></use>
+                </svg>
+              </button>
+            </div>
+          </header>
+          <main class="listView_table">
+            <div class="listView_table_head">
+              <div class="listView_header_name">Имя</div>
+              <div class="listView_header_mtime">Дата изменения</div>
+              <div class="listView_header_size">Размер</div>
+            </div>
+            <div class="listView_table_body">
+              <button type="button" class="listView_entry">
+                <div class="listView_entry_name">Coolfile.txt</div>
+                <div class="listView_entry_mtime">21.02.2022 21:00</div>
+                <div class="listView_entry_size">23.3 MB</div>
+              </button>
+              <button type="button" class="listView_entry">
+                <div class="listView_entry_name">config.toml</div>
+                <div class="listView_entry_mtime">30.06.2019 13:12</div>
+                <div class="listView_entry_size">3 KB</div>
+              </button>
+            </div>
+          </main>
+        </div> -->
+      </main>
     </div>
-
-    <div class="section">
-      <p class="section-title">Folders</p>
-      <div class="item">webfolder-app</div>
-      <div class="sub">src</div>
-      <div class="sub">public</div>
-    </div>
-
-    <div class="section">
-      <p class="section-title">Storage</p>
-      <div class="storage-bar">
-        <div class="storage-used"></div>
-      </div>
-      <small>12.4 GB / 50 GB</small>
-    </div>
-  </aside>
-
-  <!-- Main -->
-  <main class="main">
-
-    <!-- Top bar -->
-    <div class="topbar">
-      <div class="breadcrumbs" id="breadcrumbs"></div>
-
-      <div class="actions">
-        <button onclick="goUp()">⬆️</button>
-        <button onclick="copySelected()">Copy</button>
-        <button onclick="moveSelected()">Move</button>
-        <button class="danger" onclick="deleteSelected()">Delete</button>
-        <button class="primary" onclick="paste()">Paste</button>
-
-        <input type="file" id="fileInput">
-        <button onclick="uploadFile()">Upload</button>
-      </div>
-    </div>
-
-    <!-- Table -->
-    <table class="file-table">
-      <thead>
-        <tr>
-          <th><input type="checkbox" onclick="toggleAll(this)"></th>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Size</th>
-          <th>Modified</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="files"></tbody>
-    </table>
-
-  </main>
-</div>
-
-<script type="module" src="index.js"></script>
-</body>
+  </body>
 </html>

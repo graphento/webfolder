@@ -1,354 +1,95 @@
-let selectedSet = new Set();
-let clipboard = null;
-let currentPath = "/";
-let currentFiles = [];
-let lastSelectedIndex = null;
-import { getNameFromPath } from "./shared/scripts/path_utils.mjs";
-import { wfApi } from "./shared/scripts/wf_api_tmp.mjs";
+"use strict";
 
-async function loadDir(path) {
-  const res = await fetch(`/api/read_dir?path=${encodeURIComponent(path)}`);
-  const data = await res.json();
+import qw from "./shared/scripts/quickwork.js";
+import pathutils from "./shared/scripts/pathutils.js";
+import wfapi from "./shared/scripts/fakewfapi.js";
 
-  if (!data.success || !Array.isArray(data.contents)) {
-    alert("Failed to load directory");
-    return;
+const qwnew = qw.new;
+
+class Webfolder {
+  constructor() {
+    this.main = qw.one(".main");
   }
 
-  currentPath = path;
-  currentFiles = data.contents; 
-  selectedSet.clear(); //  сброс выбора при переходе
-  lastSelectedIndex = null;
-  renderFiles(currentFiles);
-}
+  async showListView(path) {
+    const entries = await wfapi.readDir(path).catch((err) => []);
 
-function renderFiles(files) {
-  const root = document.getElementById("files");
-  root.innerHTML = "";
-
-  if (!files || files.length === 0) {
-    root.innerHTML = `
-      <tr>
-        <td colspan="6" style="text-align:center; color:#888;">
-          Empty folder
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  updateBreadcrumbs();
-
-  files.forEach((f, index) => {
-    const fullPath = currentPath === "/"
-      ? "/" + f.name
-      : currentPath + "/" + f.name;
-
-    const tr = document.createElement("tr");
-
-    if (selectedSet.has(fullPath)) {
-      tr.classList.add("selected");
+    const pathDirsDisplay = [];
+    let currentPath = "/";
+    for (const dir of pathutils.dirs(path)) {
+      currentPath += dir + "/";
+      pathDirsDisplay.push({ dir, path: currentPath });
     }
 
-    // CLICK LOGIC (Explorer)
-    tr.onclick = (e) => {
-      const isCtrl = e.ctrlKey || e.metaKey;
-      const isShift = e.shiftKey;
+    this.main.set("innerHTML", "");
+    this.main.append(
+      qwnew("div.listView").append(
+        qwnew("div.listView_header").append(
+          qwnew("div.listView_path").append(
+            ...[
+              qwnew("a.listView_path_item")
+                .set("href", `?path=/`)
+                .append("root"),
+              ...pathDirsDisplay.map((display) =>
+                qwnew("a.listView_path_item")
+                  .set("href", `?path=${display.path}`)
+                  .append(display.dir),
+              ),
+            ].flatMap((item) => [item, "/"]),
+          ),
+          qwnew("div.listView_actions").append(
+            qwnew("button.listView_upload")
+              .on("click", () => {
+                wfapi.uploadFile(path).then(() => {
+                  this.showListView(path);
+                });
+              })
+              .append(
+                "Загрузить",
+                qwnew("svg.listView_upload_icon").append(
+                  qwnew("use").setAttr(
+                    "href",
+                    "./shared/components/icons.svg#upload",
+                  ),
+                ),
+              ),
+          ),
+        ),
 
-      if (isShift && lastSelectedIndex !== null) {
-        // range select
-        selectedSet.clear();
-
-        const start = Math.min(lastSelectedIndex, index);
-        const end = Math.max(lastSelectedIndex, index);
-
-        for (let i = start; i <= end; i++) {
-          const file = files[i];
-          const p = currentPath === "/"
-            ? "/" + file.name
-            : currentPath + "/" + file.name;
-
-          selectedSet.add(p);
-        }
-
-      } else if (isCtrl) {
-        // toggle
-        if (selectedSet.has(fullPath)) {
-          selectedSet.delete(fullPath);
-        } else {
-          selectedSet.add(fullPath);
-        }
-
-        lastSelectedIndex = index;
-
-      } else {
-        // single select
-        selectedSet.clear();
-        selectedSet.add(fullPath);
-        lastSelectedIndex = index;
-      }
-
-      renderFiles(files);
-    };
-
-    // DOUBLE CLICK
-    tr.ondblclick = () => {
-      if (f.isDir) {
-        loadDir(fullPath);
-      } else {
-        openFile(fullPath);
-      }
-    };
-
-    // checkbox
-    const checkTd = document.createElement("td");
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = selectedSet.has(fullPath);
-
-    checkbox.onclick = (e) => e.stopPropagation();
-
-    checkbox.onchange = () => {
-      if (checkbox.checked) {
-        selectedSet.add(fullPath);
-      } else {
-        selectedSet.delete(fullPath);
-      }
-
-      renderFiles(files);
-    };
-
-    checkTd.appendChild(checkbox);
-
-    // name
-    const nameTd = document.createElement("td");
-    nameTd.textContent = f.name;
-
-    // type
-    const typeTd = document.createElement("td");
-    typeTd.textContent = f.isDir ? "Folder" : "File";
-
-    // size
-    const sizeTd = document.createElement("td");
-    sizeTd.textContent = f.isDir || !f.size ? "—" : formatSize(f.size);
-
-    // modified
-    const modTd = document.createElement("td");
-    modTd.textContent = f.mtime ? new Date(f.mtime).toLocaleString() : "—";
-
-    function formatSize(bytes) {
-      if (!bytes) return "0 B";
-
-      const sizes = ["B", "KB", "MB", "GB"];
-      const i = Math.floor(Math.log(bytes) / Math.log(1024));
-
-      return (bytes / Math.pow(1024, i)).toFixed(1) + " " + sizes[i];
-    }
-
-    // actions
-    const actTd = document.createElement("td");
-
-    const dl = document.createElement("button");
-    dl.textContent = "⬇️";
-    dl.onclick = (e) => {
-      e.stopPropagation();
-      window.open(`/api/download?path=${encodeURIComponent(fullPath)}`);
-    };
-
-    actTd.appendChild(dl);
-
-    tr.appendChild(checkTd);
-    tr.appendChild(nameTd);
-    tr.appendChild(typeTd);
-    tr.appendChild(sizeTd);
-    tr.appendChild(modTd);
-    tr.appendChild(actTd);
-
-    root.appendChild(tr);
-  });
+        qwnew("div.listView_table").append(
+          qwnew("div.listView_table_head").append(
+            qwnew("div.listView_header_name").append("Имя"),
+            qwnew("div.listView_header_mtime").append("Дата изменения"),
+            qwnew("div.listView_header_size").append("Размер"),
+          ),
+          qwnew("div.listView_table_body").append(
+            ...entries.map((e) =>
+              qwnew("button.listView_entry")
+                .set("type", "button")
+                .append(
+                  qwnew("div.listView_entry_name").append(e.name),
+                  qwnew("div.listView_entry_mtime").append(e.mtime),
+                  qwnew("div.listView_entry_size").append(e.size),
+                ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-function toggleAll(el) {
-  const checkboxes = document.querySelectorAll("#files input[type=checkbox]");
+const webfolder = new Webfolder();
 
-  if (el.checked) {
-    selectedSet.clear();
+// Init
 
-    currentFiles.forEach(f => {
-      const fullPath = currentPath === "/"
-        ? "/" + f.name
-        : currentPath + "/" + f.name;
+const pageParams = new URLSearchParams(window.location.search);
+let path = pageParams.get("path") || "/";
+path = pathutils.toValid(path);
+if (!path) alert("Invalid path");
+path = pathutils.toAbsolute(path);
+webfolder.showListView(path);
 
-      selectedSet.add(fullPath);
-    });
-  } else {
-    selectedSet.clear();
-  }
-
-  renderFiles(currentFiles); 
-}
-
-function updateBreadcrumbs() {
-  const el = document.getElementById("breadcrumbs");
-  el.textContent = "Home " + currentPath;
-}
-
-async function deleteSelected() {
-  const arr = Array.from(selectedSet);
-
-  for (const p of arr) {
-    await deleteItem(p);
-  }
-
-  selectedSet.clear();
-  loadDir(currentPath);
-}
-
-async function openFile(path) {
-  const res = await fetch(`/api/read_file?path=${encodeURIComponent(path)}`);
-  const data = await res.json();
-
-  if (!data.success) {
-    alert(data.error);
-    return;
-  }
-
-  alert(data.contents);
-}
-
-async function createFolder() {
-  const name = prompt("Folder name:");
-  if (!name) return;
-
-  const res = await fetch("/api/create_dir", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      path: currentPath + "/" + name
-    })
-  });
-
-  const data = await res.json();
-
-  if (!data.success) {
-    alert(data.error);
-  }
-
-  loadDir(currentPath);
-}
-
-async function deleteItem(path) {
-  const res = await fetch("/api/delete", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ path })
-  });
-
-  const data = await res.json();
-
-  if (!data.success) {
-    alert(data.error);
-  }
-
-  loadDir(currentPath);
-}
-
-function goUp() {
-  if (currentPath === "/") return;
-
-  const parts = currentPath.split("/").filter(Boolean);
-  parts.pop();
-
-  const newPath = "/" + parts.join("/");
-  loadDir(newPath || "/");
-}
-
-function copySelected() {
-  if (selectedSet.size === 0) {
-    alert("Nothing selected");
-    return;
-  }
-
-  clipboard = {
-    type: "copy",
-    paths: Array.from(selectedSet)
-  };
-
-  alert("Copied");
-}
-
-function moveSelected() {
-  if (selectedSet.size === 0) {
-    alert("Nothing selected");
-    return;
-  }
-
-  clipboard = {
-    type: "move",
-    paths: Array.from(selectedSet)
-  };
-
-  alert("Move ready");
-}
-
-async function paste() {
-  if (!clipboard) {
-    alert("Clipboard empty");
-    return;
-  }
-
-  for (const src of clipboard.paths) {
-    const name = getNameFromPath(src); 
-    const dst = currentPath === "/" 
-      ? "/" + name 
-      : currentPath + "/" + name;
-
-    const url = clipboard.type === "move" ? "/api/move" : "/api/copy";
-
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ src, dst })
-    });
-  }
-
-  if (clipboard.type === "move") {
-    clipboard = null;
-  }
-
-  selectedSet.clear();
-  loadDir(currentPath);
-}
-
-async function uploadFile() {
-  const input = document.getElementById("fileInput");
-  const file = input.files[0];
-
-  if (!file) {
-    alert("Select file");
-    return;
-  }
-
-  const res = await wfApi.upload(file, currentPath); 
-  if (!res.success) {
-    alert(res.error);
-  }
-
-  input.value = "";
-  loadDir(currentPath);
-}
-
-// init
-loadDir("/");
-
-window.deleteSelected = deleteSelected;
-window.uploadFile = uploadFile;
-window.copySelected = copySelected;
-window.moveSelected = moveSelected;
-window.paste = paste;
-window.toggleAll = toggleAll;
-window.goUp = goUp;
+qw.one(".header_search_input").on("change", (e) => {
+  window.location.search = `?path=${e.target.value}`;
+});

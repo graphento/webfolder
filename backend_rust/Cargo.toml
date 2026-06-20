@@ -1,0 +1,19 @@
+[package]
+name = "backend_rust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+time = "=0.3.35"
+salvo = { version = "0.90.1", features = ["compression", "rustls", "trailing-slash", "websocket"] }
+async-stream = "0.3.6"
+include_dir = "0.7.4"
+log = "0.4.32"
+pretty_env_logger = "0.5.0"
+serde = { version = "1.0.228", features = ["serde_derive"] }
+serde_json = "1.0.150"
+tokio = { version = "^1", features = ["rt-multi-thread", "macros", "rt"] }
+toml = "1.1.2"
+sysinfo = { version = "0.38.4", features = ["linux-netdevs", "linux-tmpfs"] }
+trash = "5.2.6"
+mime_guess = "2.0.5"

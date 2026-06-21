@@ -102,14 +102,19 @@ pub async fn read_dir(req: &mut Request, res: &mut Response) {
 
 #[handler]
 pub async fn read_file(req: &mut Request, res: &mut Response) {
-    let result = wrap_json_input(req, async |json| {
-        json_extract!(json => { src: String });
-        api::read_file(&src).await
-    })
-    .await;
+    let src = match req.form::<String>("src").await {
+        Some(v) => v,
+        None => {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(make_error_res("Field `src` has wrong type or is missing"));
+            return;
+        }
+    };
 
-    match result {
-        Ok(file) => file.send(req.headers(), res).await,
+    match api::read_file(&src).await {
+        Ok(file) => {
+            file.send(req.headers(), res).await;
+        }
         Err(e) => {
             res.status_code(StatusCode::BAD_REQUEST);
             res.render(make_error_res(e));

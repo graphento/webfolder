@@ -1,12 +1,14 @@
 "use strict";
 
+import { createElement } from "./utils.js";
+
 const userprompt = Object.freeze({
   /**
    * @returns {Promise<File | null>}
    */
   selectFile() {
     return new Promise((resolve, reject) => {
-      const input = document.createElement("input");
+      const input = createElement("input");
       input.type = "file";
       input.onchange = () => resolve(input.files[0]);
       input.oncancel = () => resolve(null);
@@ -19,7 +21,7 @@ const userprompt = Object.freeze({
    */
   selectDir() {
     return new Promise((resolve, reject) => {
-      const input = document.createElement("input");
+      const input = createElement("input");
       input.type = "file";
       input.webkitdirectory = true;
       input.onchange = () => resolve(input.files);
@@ -41,10 +43,34 @@ const userprompt = Object.freeze({
    * @param {string} url
    */
   async downloadUrl(url, name) {
-    const a = document.createElement("a");
+    const a = createElement("a");
     a.href = url;
     a.download = name;
     a.click();
+  },
+
+  /**
+   * @param {string} url
+   * @param {FormData} formdata
+   */
+  async downloadPostViaForm(url, formdata) {
+    const form = createElement("form");
+    form.method = "POST";
+    form.action = url;
+    form.style.display = "none";
+
+    for (const [key, value] of formdata.entries()) {
+      const field = createElement("input");
+      field.type = "hidden";
+      field.name = key;
+      field.value = value;
+      form.appendChild(field);
+    }
+
+    // TODO: check it is actually required
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
   },
 });
 

@@ -2,7 +2,7 @@
 
 "use strict";
 
-import { createElement, IterableWeakSet } from "./utils.js";
+import { createElement, WeakArray } from "./utils.js";
 
 class CssSelector {
   /** @type {string} */
@@ -189,14 +189,14 @@ class QwDynSet {
    * @param {EventTarget} observer
    */
   constructor(elements, observer) {
-    this.#elements = new IterableWeakSet(elements);
+    this.#elements = new WeakArray(elements);
     this.#observer = observer;
     this.#observer.addEventListener("add", (event) => {
       const element = event.detail;
       for (const operation of this.#operations) {
         operation(element);
       }
-      this.#elements.insert(element);
+      this.#elements.push(element);
     });
   }
 

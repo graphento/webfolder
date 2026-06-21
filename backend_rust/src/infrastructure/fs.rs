@@ -6,10 +6,7 @@ use std::{
     time::SystemTime,
 };
 use sysinfo::Disks;
-use tokio::{
-    fs,
-    io::{self},
-};
+use tokio::{fs, io};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DiskMetadata {
@@ -52,8 +49,10 @@ pub async fn create_file(dst: impl AsRef<Path>) -> io::Result<()> {
 pub struct EntryMetadata {
     path: PathBuf,
     r#type: EntryType,
+    ctime: Option<SystemTime>,
     mtime: Option<SystemTime>,
     size: u64,
+    is_readonly: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -63,25 +62,46 @@ pub enum EntryType {
     Symlink,
 }
 
-pub async fn read_dir(src: impl AsRef<Path>) -> io::Result<Vec<EntryMetadata>> {
-    let src = src.as_ref();
-    let mut readdir = fs::read_dir(src).await?;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct ReadDirData {
+    metadata: EntryMetadata,
+    entries: Vec<EntryMetadata>,
+}
+
+fn convert_metadata(path: impl Into<PathBuf>, metadata: std::fs::Metadata) -> EntryMetadata {
+    EntryMetadata {
+        path: path.into(),
+        r#type: match metadata.file_type() {
+            t if t.is_dir() => EntryType::Dir,
+            t if t.is_file() => EntryType::File,
+            t if t.is_symlink() => EntryType::Symlink,
+            _ => unreachable!(),
+        },
+        ctime: metadata.created().ok(),
+        mtime: metadata.modified().ok(),
+        size: metadata.len(),
+        is_readonly: metadata.permissions().readonly(),
+    }
+}
+
+pub async fn read_metadata(src: impl Into<PathBuf>) -> io::Result<EntryMetadata> {
+    let src = src.into();
+    let metadata = fs::metadata(&src).await?;
+    Ok(convert_metadata(src, metadata))
+}
+
+pub async fn read_dir(src: impl Into<PathBuf>) -> io::Result<ReadDirData> {
+    let src = src.into();
+    let mut readdir = fs::read_dir(&src).await?;
     let mut entries = Vec::new();
     while let Some(entry) = readdir.next_entry().await? {
         let metadata = entry.metadata().await?;
-        entries.push(EntryMetadata {
-            path: entry.path(),
-            r#type: match metadata.file_type() {
-                t if t.is_dir() => EntryType::Dir,
-                t if t.is_file() => EntryType::File,
-                t if t.is_symlink() => EntryType::Symlink,
-                _ => unreachable!(),
-            },
-            mtime: metadata.modified().ok(),
-            size: metadata.len(),
-        });
+        entries.push(convert_metadata(entry.path(), metadata));
     }
-    Ok(entries)
+    Ok(ReadDirData {
+        metadata: read_metadata(src).await?,
+        entries,
+    })
 }
 
 pub async fn read_file_as_named(src: impl AsRef<Path>) -> io::Result<NamedFile> {
@@ -209,7 +229,7 @@ pub fn ensure_absolute(path: impl AsRef<Path>) -> io::Result<()> {
     }
 }
 
-/// Resolves traversing and collapses multislashes, 
+/// Resolves traversing and collapses multislashes,
 /// must NOT be used for real filesystem since it eliminates symlinks
 pub fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
     path.as_ref().components().collect()

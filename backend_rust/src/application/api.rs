@@ -1,9 +1,9 @@
 use crate::infrastructure::{
-    fs,
+    fs::{self, ReadDirData},
     sys::{self, SysStats},
 };
 use salvo::fs::NamedFile;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 // fn is_localhost(req: &Request) -> bool {
 //     use salvo::conn::SocketAddr::*;
@@ -34,9 +34,10 @@ pub async fn create_file(dst: impl AsRef<Path>) -> Result<(), String> {
         .map_err(|e| format!("Failed to create file: {}", e))
 }
 
-pub async fn read_dir(src: impl AsRef<Path>) -> Result<Vec<fs::EntryMetadata>, String> {
+pub async fn read_dir(src: impl Into<PathBuf>) -> Result<ReadDirData, String> {
+    let src = src.into();
     fs::ensure_absolute(&src).map_err(|_| "`src` must be absolute")?;
-    fs::read_dir(&src)
+    fs::read_dir(src)
         .await
         .map_err(|e| format!("Failed to read directory: {}", e))
 }

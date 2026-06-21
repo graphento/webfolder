@@ -3,6 +3,10 @@ mod domain;
 mod infrastructure;
 mod interface;
 
+use crate::{
+    domain::Config,
+    interface::{api::make_api_router, pages::make_embed_pages_router},
+};
 use include_dir::{Dir, include_dir};
 use log::{debug, error, info, trace, warn};
 use salvo::trailing_slash::remove_slash;
@@ -11,11 +15,6 @@ use salvo::{
     prelude::*,
 };
 use std::{net::Ipv4Addr, process::exit, time::Duration};
-
-use crate::{
-    domain::Config,
-    interface::{api::make_api_router, pages::make_embed_pages_router},
-};
 
 static FRONTEND: Dir = include_dir!("../frontend/");
 

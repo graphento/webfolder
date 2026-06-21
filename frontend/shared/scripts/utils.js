@@ -1,4 +1,4 @@
-// JS utils
+"use strict";
 
 /**
  * Creates element by tag, handling namespaced as well

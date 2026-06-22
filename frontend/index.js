@@ -3,15 +3,11 @@
 import qw from "./shared/scripts/quickwork.js";
 import pathutils from "./shared/scripts/pathutils.js";
 import wfapi from "./shared/scripts/fakewfapi.js";
+import userprompt from "./shared/scripts/userprompt.js";
 
 const qwnew = qw.new;
 
-function joinPath(base, name) {
-  return pathutils.join(base, name);
-}
-
 function formatSize(bytes) {
-  console.log(bytes);
   const units = ["KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
   let value = bytes / 1024;
   let unitIndex = 0;
@@ -25,6 +21,16 @@ function formatSize(bytes) {
   if (value < 10) return `${value.toFixed(2)} ${units[unitIndex]}`;
   if (value < 100) return `${value.toFixed(1)} ${units[unitIndex]}`;
   return `${Math.round(value)} ${units[unitIndex]}`;
+}
+
+function formatDate(ms) {
+  const d = new Date(ms);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const MM = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}.${MM}.${yyyy} ${hh}:${mm}`;
 }
 
 class Webfolder {
@@ -161,7 +167,7 @@ class Webfolder {
     const clip = structuredClone(this.clipboard);
     try {
       for (const src of clip.src) {
-        const dst = joinPath(this.path, pathutils.filename(src));
+        const dst = pathutils.join(this.path, pathutils.components(src).pop());
         if (clip.action === "cut" && src === dst) {
           alert("Вставьте в другую папку");
           return;
@@ -210,7 +216,8 @@ class Webfolder {
 
   async promptUploadFile() {
     try {
-      await wfapi.uploadFile(this.path);
+      const file = await userprompt.selectFile();
+      await wfapi.writeFile(pathutils.join(this.path, file.name), file);
       await this.showListView(this.path);
     } catch (err) {
       alert(`Ошибка загрузки: ${err.message}`);
@@ -219,7 +226,13 @@ class Webfolder {
 
   async promptUploadDir() {
     try {
-      await wfapi.uploadDir(this.path);
+      const dir = await userprompt.selectDir();
+      for await (const file of dir) {
+        await wfapi.writeFile(
+          pathutils.join(this.path, file.webkitRelativePath),
+          file,
+        );
+      }
       await this.showListView(this.path);
     } catch (err) {
       alert(`Ошибка загрузки папки: ${err.message}`);
@@ -231,45 +244,38 @@ class Webfolder {
     if (!name?.trim()) return;
     const trimmed = name.trim().replace(/[\\/]+/g, "");
     try {
-      await wfapi.createDir(joinPath(this.path, trimmed));
+      await wfapi.createDir(pathutils.join(this.path, trimmed));
       await this.showListView(this.path);
     } catch (err) {
       alert(`Ошибка: ${err.message}`);
     }
   }
 
-  parentPath(path) {
-    const p = path.replace(/\/+$/, "");
-    const idx = p.lastIndexOf("/");
-    return idx <= 0 ? "/" : p.slice(0, idx);
-  }
-
   async navigate(pathInput) {
-    const raw = String(pathInput ?? "").trim();
-    if (!raw) return;
-    const valid = pathutils.toValid(pathutils.toAbsolute(raw));
-    if (!valid) {
-      alert("Неверный путь");
+    const path = String(pathInput ?? "").trim() || "/";
+    if (!pathutils.isAbsolute(path)) {
+      alert("Путь должен быть абсолютным");
       return;
     }
 
-    let kind;
+    let metadata;
     try {
-      kind = await wfapi.entryKind(valid);
+      metadata = await wfapi.readMetadata(path);
+      if (!metadata) {
+        alert("Путь не существует");
+        return;
+      }
     } catch (err) {
       alert(`Не удалось открыть путь: ${err.message}`);
       return;
     }
 
-    if (kind === null) {
-      alert("Ничего не найдено");
-      return;
-    }
-
-    if (kind === "file") {
-      const parent = pathutils.toValid(this.parentPath(valid)) || "/";
+    if (metadata.type === "file") {
+      const components = pathutils.components(path);
+      components.pop();
+      let parent = pathutils.join("/", components.join("/"));
       this.selected.clear();
-      this.selected.add(valid);
+      this.selected.add(path);
       this.path = parent;
       history.replaceState(null, "", `?path=${encodeURIComponent(parent)}`);
       qw.one(".header_search_input").set("value", parent);
@@ -278,10 +284,10 @@ class Webfolder {
     }
 
     this.selected.clear();
-    this.path = valid;
-    history.replaceState(null, "", `?path=${encodeURIComponent(valid)}`);
-    qw.one(".header_search_input").set("value", valid);
-    await this.showListView(valid);
+    this.path = path;
+    history.replaceState(null, "", `?path=${encodeURIComponent(path)}`);
+    qw.one(".header_search_input").set("value", path);
+    await this.showListView(path);
   }
 
   bindDropTarget(element, targetPath) {
@@ -300,7 +306,7 @@ class Webfolder {
         try {
           await Promise.all(
             [...e.dataTransfer.files].map((file) =>
-              wfapi.writeFile(joinPath(targetPath, file.name), file),
+              wfapi.writeFile(pathutils.join(targetPath, file.name), file),
             ),
           );
           await this.showListView(this.path);
@@ -311,28 +317,34 @@ class Webfolder {
   }
 
   async showListView(path) {
-    const validPath = pathutils.toValid(pathutils.toAbsolute(path)) || "/";
-    this.path = validPath;
-
-    let entries = [];
+    let result;
     try {
-      entries = await wfapi.readDir(validPath);
+      result = await wfapi.readDir(path);
     } catch (err) {
       alert(`Не удалось открыть папку: ${err.message}`);
       return;
     }
 
+    const metadata = result.metadata;
+    const entries = result.entries;
+
+    const validPath = pathutils.normalize_slashes(metadata.path);
+    this.path = validPath;
+
     const pathDirsDisplay = [];
     let currentPath = "/";
-    for (const dir of pathutils.dirs(validPath)) {
-      currentPath = joinPath(currentPath, dir);
+    for (const dir of pathutils.components(validPath)) {
+      currentPath = pathutils.join(currentPath, dir);
       pathDirsDisplay.push({ dir, path: currentPath });
     }
 
     const wf = this;
-    const allSelected =
-      entries.length > 0 &&
-      entries.every((e) => wf.selected.has(joinPath(validPath, e.name)));
+    const allSelected = entries.every((entry) => {
+      let res = wf.selected.has(
+        pathutils.join(validPath, pathutils.components(entry.path).pop()),
+      );
+      return res;
+    });
 
     this.main.set("innerHTML", "");
     const tableBody = qwnew("div.listView_table_body");
@@ -346,12 +358,20 @@ class Webfolder {
             qwnew("div.listView_path").append(
               ...[
                 qwnew("a.listView_path_item")
+                  .on("click", (e) => {
+                    e.preventDefault();
+                    wf.navigate("/");
+                  })
                   .set("href", "?path=/")
                   .append("root"),
-                ...pathDirsDisplay.map((d) =>
+                ...pathDirsDisplay.map((display) =>
                   qwnew("a.listView_path_item")
-                    .set("href", `?path=${encodeURIComponent(d.path)}`)
-                    .append(d.dir),
+                    .on("click", (e) => {
+                      e.preventDefault();
+                      wf.navigate(display.path);
+                    })
+                    .set("href", `?path=${encodeURIComponent(display.path)}`)
+                    .append(display.dir),
                 ),
               ].flatMap((item) => [item, "/"]),
             ),
@@ -360,12 +380,17 @@ class Webfolder {
             qwnew("div.listView_table_head").append(
               qwnew("input.listView_selectall")
                 .set("type", "checkbox")
-                .set("checked", allSelected)
+                .setAttr("checked", allSelected || undefined)
                 .on("change", () => {
                   if (allSelected) wf.selected.clear();
                   else {
                     for (const entry of entries) {
-                      wf.selected.add(joinPath(validPath, entry.name));
+                      wf.selected.add(
+                        pathutils.join(
+                          validPath,
+                          pathutils.components(entry.path).pop(),
+                        ),
+                      );
                     }
                   }
                   wf.showListView(wf.path);
@@ -378,13 +403,12 @@ class Webfolder {
             tableBody.append(
               ...(entries.length === 0
                 ? [qwnew("div.listView_empty").append("Папка пуста")]
-                : entries.map((e) => {
-                    const fullPath = joinPath(validPath, e.name);
-                    const isDir = e.metadata.mimetype === "inode/directory";
-                    const isSelected = wf.selected.has(fullPath);
+                : entries.map((entry) => {
+                    const isDir = entry.type === "dir";
+                    const isSelected = wf.selected.has(entry.path);
 
                     const row = qwnew("div.listView_entry")
-                      .setAttr("data-path", fullPath)
+                      .setAttr("data-path", entry.path)
                       .set(
                         "className",
                         `listView_entry${isSelected ? " listView_entry_selected" : ""}`,
@@ -395,42 +419,44 @@ class Webfolder {
                           .set("checked", isSelected)
                           .on("click", (ev) => ev.stopPropagation())
                           .on("change", (ev) => {
-                            if (ev.target.checked) wf.selected.add(fullPath);
-                            else wf.selected.delete(fullPath);
+                            if (ev.target.checked) wf.selected.add(entry.path);
+                            else wf.selected.delete(entry.path);
                             wf.refreshSelectionHighlight();
                           }),
-                        qwnew("div.listView_entry_name").append(e.name),
+                        qwnew("div.listView_entry_name").append(
+                          pathutils.components(entry.path).pop(),
+                        ),
                         qwnew("div.listView_entry_type").append(
                           isDir ? "Папка" : "Файл",
                         ),
                         qwnew("div.listView_entry_mtime").append(
-                          e.metadata.mtime,
+                          entry.mtime === null ? "—" : formatDate(entry.mtime),
                         ),
                         qwnew("div.listView_entry_size").append(
-                          isDir ? "—" : formatSize(e.metadata.size),
+                          isDir ? "—" : formatSize(entry.size),
                         ),
                       );
 
                     row.on("click", (ev) => {
                       if (ev.target.closest("input")) return;
                       if (ev.ctrlKey || ev.metaKey) {
-                        if (isSelected) wf.selected.delete(fullPath);
-                        else wf.selected.add(fullPath);
+                        if (isSelected) wf.selected.delete(entry.path);
+                        else wf.selected.add(entry.path);
                       } else {
                         wf.selected.clear();
-                        wf.selected.add(fullPath);
+                        wf.selected.add(entry.path);
                       }
                       wf.refreshSelectionHighlight();
                     });
 
                     if (isDir) {
-                      row.on("dblclick", () => wf.navigate(fullPath));
-                      wf.bindDropTarget(row, fullPath);
+                      row.on("dblclick", () => wf.navigate(entry.path));
+                      wf.bindDropTarget(row, entry.path);
                     } else {
                       row.setAttr("draggable", "true");
-                      row.on("dblclick", () => wfapi.downloadFile(fullPath));
+                      row.on("dblclick", () => wfapi.downloadFile(entry.path));
                       row.on("dragstart", (ev) => {
-                        ev.dataTransfer.setData("text/plain", fullPath);
+                        ev.dataTransfer.setData("text/plain", entry.path);
                       });
                     }
 
@@ -446,10 +472,7 @@ class Webfolder {
 const webfolder = new Webfolder();
 
 const pageParams = new URLSearchParams(window.location.search);
-let initPath = pathutils.toValid(
-  pathutils.toAbsolute(pageParams.get("path") || "/"),
-);
-if (!initPath) initPath = "/";
+let initPath = pageParams.get("path") || "/";
 
 qw.one(".header_search_input").set("value", initPath);
 qw.one(".header_search_input").on("keydown", (e) => {

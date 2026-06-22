@@ -25,8 +25,8 @@ const opfs = Object.freeze({
   async getFile(dst, create = false) {
     const components = pathutils.components(dst);
     const filename = components.pop();
-    if (!filename) throw new Error("Path is root");
-    const dir = await opfs.getDir(components.join("/"));
+    if (!filename) throw new DOMException("Path is root", "TypeMismatchError");
+    const dir = await opfs.getDir(components.join("/"), create);
     return dir.getFileHandle(filename, { create });
   },
 
@@ -92,9 +92,9 @@ const opfs = Object.freeze({
         return {
           path: src,
           type: "dir",
-          ctime: 0,
-          mtime: 0,
-          size: 0,
+          ctime: null,
+          mtime: null,
+          size: null,
           is_readonly: false,
         };
       }
@@ -173,7 +173,14 @@ const api = Object.freeze({
    */
   async downloadFile(src) {
     const file = await opfs.readFile(src);
-    userprompt.downloadBlob(file, file.name)
+    userprompt.downloadBlob(file, file.name);
+  },
+
+  /**
+   * @param {string} src
+   */
+  async readMetadata(src) {
+    return opfs.readMetadata(src);
   },
 
   /**

@@ -107,6 +107,7 @@ class QwSet {
    * @param {T[K]} value
    */
   setAttr(prop, value) {
+    if (value === undefined) return this;
     for (const element of this.#elements) {
       element.setAttribute(prop, value);
     }
